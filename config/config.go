@@ -38,7 +38,6 @@ func ReadConfig() tomlConfig {
 		if err != nil {
 			log.Fatal(err)
 		}
-		print(11)
 	})
 	return conf.instance
 }

@@ -12,5 +12,5 @@ import (
 func main() {
 	db := models.Initialize()
 	fmt.Println(db)
-	fmt.Println(api.GetAllGames())
+	fmt.Println(api.GetAllGames("US"))
 }
