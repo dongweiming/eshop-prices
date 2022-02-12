@@ -22,20 +22,36 @@ type database struct {
 var db *database
 var DB *gorm.DB
 
-// Aliases,Publisher,Developer,Platforms,Genres
-
 type Game struct {
-	Id      int32
+	ID      int32              `gorm:"primaryKey;autoIncrement"`
 	CnTitle string             `gorm:"default:"`
 	EnTitle string             `gorm:"type:varchar(200);index:,default:"`
-	Score float32              `gorm:"default:10.0"`
-	MetacriticScore uint8      `gorm:"default:10"`
+	Score float32              `gorm:"default:0.0"`
+	MetacriticScore uint8      `gorm:"default:0"`
 	ThumbImg string            `gorm:"default:"`
-	Slug string                `gorm:"primaryKey:,type:varchar(100);uniqueIndex"`
+	Slug string                `gorm:"type:varchar(100);uniqueIndex"`
 	Kind uint8                 `gorm:"default:0"`
 	Desc string
+	Aliases string
+	HasChinese bool
 	ReleaseTime datatypes.Date
 }
+
+func (g *Game) Publishers() []Publisher {
+	return GetPublishers(g.ID)
+}
+
+func (g *Game) Developers() []Developer {
+	return GetDevelopers(g.ID)
+}
+
+func (g *Game) Genres() []Genre {
+	return GetGenres(g.ID)
+}
+
+//func (g *Game) Platforms() {
+//
+//}
 
 func Initialize() *gorm.DB {
 	once.Do(func() {

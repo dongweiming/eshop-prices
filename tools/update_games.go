@@ -18,14 +18,14 @@ import (
 	db := models.DB
 	items := api.GetAllGames("US")
 
-	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	// 展示不用事务提交方式
+	// tx := db.Begin()
+	// defer func() {
+	//if r := recover(); r != nil {
+	//		tx.Rollback()
+	//	}
+	// }()
 
-	var games []models.Game
 	for _,  item := range items {
 		t, err := dateparse.ParseAny(item.ReleaseDate)
 		if err != nil {
@@ -38,24 +38,33 @@ import (
 			Desc: item.Desc,
 			ReleaseTime: datatypes.Date(t),
 		}
-		games = append(games, game)
-	}
 
-	// TODO: clause.OnConflict is not work
-	for _, game := range games {
+		// TODO: clause.OnConflict is not work
 		var g models.Game
+		var id int32
 		if err := db.Where("slug = ?", game.Slug).First(&g).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				db.Create(&game)
+				id = game.ID
 			} else {
 				log.Error(fmt.Sprintf("Upsert data error: %v\n", err))
 			}
 		} else {
-			db.Model(&game).Where("slug = ?", game.Slug).Updates(game)
+			db.Model(&g).Where("slug = ?", game.Slug).Updates(game)
+			id = g.ID
+
 		}
+		// FIXIT
+		if id == 0 {
+			fmt.Printf("%v\n", game)
+			continue
+		}
+		models.BindGenres(id, item.Genres)
+		models.BindPublishers(id, item.Publishers)
+		models.BindDevelopers(id, item.Developers)
 	}
 
-	tx.Commit()
+	// tx.Commit()
 
 	log.Info("Game's Data had Updated!")
 }

@@ -1,16 +1,7 @@
 package main
 
-import (
-	"fmt"
-
-	"github.com/dongweiming/eshop-prices/config"
-	"github.com/dongweiming/eshop-prices/models"
-
-	"github.com/dongweiming/go-eshop/api"
-)
+import "github.com/dongweiming/eshop-prices/cmd"
 
 func main() {
-	db := models.Initialize()
-	fmt.Println(db)
-	fmt.Println(api.GetAllGames("US"))
+	cmd.Execute()
 }
