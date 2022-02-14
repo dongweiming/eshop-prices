@@ -28,8 +28,8 @@ type Game struct {
 	EnTitle string             `gorm:"type:varchar(200);index:,default:"`
 	Score float32              `gorm:"default:0.0"`
 	MetacriticScore uint8      `gorm:"default:0"`
-	ThumbImg string            `gorm:"default:"`
-	Slug string                `gorm:"type:varchar(100);uniqueIndex"`
+	ThumbImg string            `gorm:"type:varchar(100);default:"`
+	Slug string                `gorm:"type:varchar(200);uniqueIndex"`
 	Kind uint8                 `gorm:"default:0"`
 	Desc string
 	Aliases string

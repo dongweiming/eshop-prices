@@ -32,7 +32,7 @@ var migrateCmd = &cobra.Command{
 	Long: `Database migration is required whenever database fields are changed!`,
 	Run: func(cmd *cobra.Command, args []string) {
 		DB.AutoMigrate(&Game{}, &Publisher{}, &Developer{}, &Genre{}, &GamePublisher{},
-			&GameDeveloper{}, &GameGenre{})
+			&GameDeveloper{}, &GameGenre{}, &Price{})
 		log.Info("Database Migrated!")
 	},
 }

@@ -25,7 +25,6 @@ import (
 	//		tx.Rollback()
 	//	}
 	// }()
-
 	for _,  item := range items {
 		t, err := dateparse.ParseAny(item.ReleaseDate)
 		if err != nil {
@@ -54,11 +53,7 @@ import (
 			id = g.ID
 
 		}
-		// FIXIT
-		if id == 0 {
-			fmt.Printf("%v\n", game)
-			continue
-		}
+
 		models.BindGenres(id, item.Genres)
 		models.BindPublishers(id, item.Publishers)
 		models.BindDevelopers(id, item.Developers)
