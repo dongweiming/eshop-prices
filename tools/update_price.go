@@ -23,7 +23,8 @@ import (
 const (
 	limit = 1000
 	url = "https://www.nsgreviews.com/search/s?search=&offset=%d&limit=1000"
-	gameDetailURL = "https://www.nintendo.com/games/detail/%s/"
+	gameDetailURL = "https://www.nintendo.com/store/products/%s/"
+	titleURL = "https://ec.nintendo.com/US/us/titles/%d"
 )
 
 type item struct {
@@ -32,6 +33,7 @@ type item struct {
 	Origin     float32 `json:"eshop_list_price_na"`
 	SaleEnds   string  `json:"sale_ends"`
 	Cover      string  `json:"cover_art_url"`
+	Nsuid      int     `json:"nsuid_na"`
 }
 
 type Response struct {
@@ -56,7 +58,6 @@ func GetNsgData(page int) Response {
 	if err := json.Unmarshal(body, &result); err != nil {
 		fmt.Println("Can not unmarshal JSON")
 	}
-	fmt.Printf("%v", result)
 	return result
 }
 
@@ -112,7 +113,6 @@ func updatePrice(i item, game Game) {
 }
 
 func UpdatePrice(m map[string]Game, items []item) {
-	print(len(items))
 	var wg sync.WaitGroup
 	ch := make(chan struct{}, 3)
 	for _, i := range items {
@@ -123,8 +123,14 @@ func UpdatePrice(m map[string]Game, items []item) {
 			wg.Add(1)
 			go func(i item) {
 				defer wg.Done()
-				if game, err := CreateGame(i.Slug); err != nil {
+				if game, err := CreateGame(i.Slug, fmt.Sprintf(gameDetailURL, i.Slug)); err == nil {
 					updatePrice(i, game)
+				} else {
+					if game, err := CreateGame(i.Slug, fmt.Sprintf(titleURL, i.Nsuid)); err == nil {
+						updatePrice(i, game)
+					} else {
+						log.Error(fmt.Sprintf("Create game error: %s %v", i.Slug, err))
+					}
 				}
 				<-ch
 			}(i)
@@ -133,18 +139,19 @@ func UpdatePrice(m map[string]Game, items []item) {
 	wg.Wait()
 }
 
-func CreateGame(slug string) (Game, error) {
-	doc, err := htmlquery.LoadURL(fmt.Sprintf(gameDetailURL, slug))
+func CreateGame(slug, url string) (Game, error) {
+	log.Info("LoadURL: ", url)
+	doc, err := htmlquery.LoadURL(url)
 	if err != nil {
-		log.Error("Http Get Error", err)
+		log.Error("Http Get Error: ", err)
 		return Game{}, err
 	}
-	title := htmlquery.FindOne(doc, "//h1[contains(@class, 'game-title')]")
+	title := htmlquery.FindOne(doc, "//h1")
 	if title == nil {
 		return Game{}, errors.New("No Title!")
 	}
 
-	desc := htmlquery.FindOne(doc, "//div[@class='overview-content']")
+	desc := htmlquery.FindOne(doc, "//div[starts-with(@class, 'RichTextstyles__Html')]")
 	if desc == nil {
 		return Game{}, errors.New("No Desc content!")
 	}
@@ -152,12 +159,33 @@ func CreateGame(slug string) (Game, error) {
 	intro := strings.TrimSpace(strings.Split(strings.ReplaceAll(strings.ReplaceAll(
 		htmlquery.InnerText(desc), "\n                ", " "), "\n\n", ""), "Read more")[0])
 
-	date := htmlquery.FindOne(doc, "//div[contains(@class, 'release-date')]/dd")
+	list, err := htmlquery.QueryAll(doc, "//div[starts-with(@class, 'ProductInfostyles__InfoRow')]")
+	if err != nil {
+		panic(err)
+	}
 
-	if date == nil {
+	date := ""
+	HasChinese := false
+
+	for _, item := range list {
+		heading := htmlquery.InnerText(htmlquery.FindOne(
+			item, "h3[starts-with(@class, 'Headingstyles__StyledH')]"))
+		info := htmlquery.InnerText(htmlquery.FindOne(
+			item, "div[starts-with(@class, 'ProductInfostyles__InfoDescr')]/div"))
+		if heading == "Release date" {
+			date = info
+			break
+		} else if heading == "Supported languages" {
+			if strings.Contains(info, "Chinese") {
+				HasChinese = true
+			}
+		}
+	}
+
+	if date == "" {
 		return Game{}, errors.New("No release date!")
 	}
-	t, err := utils.ParseDate(htmlquery.InnerText(date))
+	t, err := utils.ParseDate(date)
 	if err != nil {
 		return Game{}, err
 	}
@@ -166,12 +194,35 @@ func CreateGame(slug string) (Game, error) {
 		EnTitle: htmlquery.InnerText(title),
 		Slug: slug,
 		Desc: intro,
-	ReleaseTime: datatypes.Date(t),
+		HasChinese: HasChinese,
+		ReleaseTime: datatypes.Date(t),
 	}
 
 	result := DB.Create(&game)
 
 	if game.ID != 0 { // For test
+
+		for _, item := range list {
+			heading := htmlquery.InnerText(htmlquery.FindOne(
+				item, "h3[starts-with(@class, 'Headingstyles__StyledH')]"))
+			qc, err := htmlquery.QueryAll(item, "div[starts-with(@class, 'ProductInfostyles__InfoDescr')]//a")
+			if err != nil {
+				return Game{}, err
+			}
+
+			var data []string
+			for _, i := range qc {
+				data = append(data, htmlquery.InnerText(i))
+			}
+			if heading == "Genre" {
+				BindGenres(game.ID, data)
+			} else if heading == "Publisher" {
+				BindPublishers(game.ID, data)
+			} else if heading == "Developer" { // Maybe not used
+				BindDevelopers(game.ID, data)
+			}
+		}
+
 		item := htmlquery.FindOne(doc, "//div[contains(@class, 'genre')]/dd")
 		if item != nil {
 			BindGenres(game.ID, strings.Split(htmlquery.InnerText(item), ","))
@@ -185,6 +236,12 @@ func CreateGame(slug string) (Game, error) {
 		item = htmlquery.FindOne(doc, "//div[contains(@class, 'genre publisher')]/dd")
 		if item != nil {
 			BindPublishers(game.ID, strings.Split(htmlquery.InnerText(item), ","))
+		}
+		if err = utils.WriteThumbImg(slug); err != nil {
+			log.Info(err)
+		} else {
+			game.ThumbImg = fmt.Sprintf("%s.png", slug)
+			DB.Save(&game)
 		}
 	} else {
 		log.Error(result.Error)

@@ -12,9 +12,11 @@ import (
 
 	"github.com/dongweiming/eshop-prices/models"
 	"github.com/dongweiming/go-eshop/api"
- )
+	"github.com/dongweiming/eshop-prices/utils"
+)
 
- func main() {
+
+func main() {
 	db := models.DB
 	items := api.GetAllGames("US")
 
@@ -54,9 +56,18 @@ import (
 
 		}
 
+		if g.ThumbImg == "" {
+			if err = utils.WriteThumbImg(item.Slug); err != nil {
+				log.Info(err)
+			} else {
+				g.ThumbImg = fmt.Sprintf("%s.png", item.Slug)
+				db.Save(&g)
+			}
+		}
+
 		models.BindGenres(id, item.Genres)
-		models.BindPublishers(id, item.Publishers)
-		models.BindDevelopers(id, item.Developers)
+		models.BindPublishers(id, strings.Split(item.Publishers, ","))
+		models.BindDevelopers(id, strings.Split(item.Developers, ","))
 	}
 
 	// tx.Commit()
